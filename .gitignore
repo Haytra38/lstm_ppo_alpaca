@@ -1,0 +1,18 @@
+# Python cache and virtualenv
+__pycache__/
+*.pyc
+.venv/
+
+# Training artifacts and outputs
+saved_models/
+models/
+results/
+ppo_trading_minute_historical_tensorboard/
+
+# Local data files (store externally, e.g., S3)
+data/*.csv
+
+# OS/editor noise
+.DS_Store
+.idea/
+.vscode/
