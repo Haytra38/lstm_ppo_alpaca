@@ -155,6 +155,115 @@ class LSTMConfigurator:
         # Créer le dossier de configuration s'il n'existe pas
         if not os.path.exists(self.config_folder):
             os.makedirs(self.config_folder)
+
+    def set_parameters(self, params: Dict[str, Any]) -> None:
+        mc = self.current_config.get('model_config', {})
+        tc = self.current_config.get('training_config', {})
+        # Basiques
+        if 'sequence_length' in params:
+            mc['sequence_length'] = params['sequence_length']
+            for layer in mc.get('layers', []):
+                layer['sequence_length'] = params['sequence_length']
+        if 'learning_rate' in params:
+            mc['learning_rate'] = params['learning_rate']
+            tc['learning_rate'] = params['learning_rate']
+        if 'batch_size' in params:
+            tc['batch_size'] = params['batch_size']
+        if 'epochs' in params:
+            tc['epochs'] = params['epochs']
+        if 'prediction_horizon' in params:
+            tc['prediction_horizon'] = params['prediction_horizon']
+        # Architecture
+        if 'hidden_size' in params and mc.get('layers'):
+            mc['layers'][0]['units'] = params['hidden_size']
+        if 'num_layers' in params:
+            num = int(params['num_layers'])
+            layers = mc.get('layers', [])
+            if num <= len(layers):
+                mc['layers'] = layers[:num]
+            else:
+                base = layers[-1] if layers else {
+                    'units': 64, 'return_sequences': True, 'dropout': 0.2,
+                    'sequence_length': mc.get('sequence_length', 60),
+                    'bidirectional': False, 'batch_normalization': False
+                }
+                mc['layers'] = layers + [dict(base) for _ in range(num - len(layers))]
+        if 'dropout' in params:
+            for layer in mc.get('layers', []):
+                layer['dropout'] = params['dropout']
+        if 'bidirectional' in params:
+            for layer in mc.get('layers', []):
+                layer['bidirectional'] = params['bidirectional']
+        if 'batch_normalization' in params:
+            for layer in mc.get('layers', []):
+                layer['batch_normalization'] = params['batch_normalization']
+        if 'activation_function' in params:
+            for layer in mc.get('layers', []):
+                layer['activation'] = params['activation_function']
+        if 'recurrent_activation' in params:
+            for layer in mc.get('layers', []):
+                layer['recurrent_activation'] = params['recurrent_activation']
+        # Optimiseur et entraînement avancé
+        if 'optimizer' in params:
+            mc['optimizer'] = params['optimizer']
+        if 'weight_decay' in params:
+            tc['weight_decay'] = params['weight_decay']
+        if 'gradient_clipping' in params:
+            mc['gradient_clipping'] = {
+                'enabled': True,
+                'max_norm': params['gradient_clipping'],
+                'norm_type': 2
+            }
+        if 'use_lr_scheduler' in params:
+            tc['use_lr_scheduler'] = params['use_lr_scheduler']
+        if 'lr_scheduler_type' in params:
+            tc['lr_scheduler_type'] = params['lr_scheduler_type']
+        if 'lr_scheduler_patience' in params:
+            tc['lr_scheduler_patience'] = params['lr_scheduler_patience']
+        if 'lr_scheduler_factor' in params:
+            tc['lr_scheduler_factor'] = params['lr_scheduler_factor']
+        if 'use_early_stopping' in params:
+            tc['use_early_stopping'] = params['use_early_stopping']
+        if 'early_stopping_patience' in params:
+            tc['early_stopping_patience'] = params['early_stopping_patience']
+        if 'early_stopping_min_delta' in params:
+            tc['early_stopping_min_delta'] = params['early_stopping_min_delta']
+        # Prétraitement
+        if 'normalize_data' in params:
+            tc.setdefault('data_preprocessing', {}).update({'normalize_data': params['normalize_data']})
+        if 'standardization_method' in params:
+            tc.setdefault('data_preprocessing', {}).update({'standardization_method': params['standardization_method']})
+        if 'feature_engineering' in params:
+            tc['feature_engineering'] = params['feature_engineering']
+        # Splits et flags
+        if 'validation_split' in params:
+            tc['validation_split'] = params['validation_split']
+        if 'test_split' in params:
+            tc['test_split'] = params['test_split']
+        if 'shuffle_training' in params:
+            tc['shuffle_training'] = params['shuffle_training']
+        if 'mixed_precision' in params:
+            mc['mixed_precision'] = params['mixed_precision']
+        # Logging / sauvegarde
+        if 'save_model_frequency' in params:
+            tc['save_model_frequency'] = params['save_model_frequency']
+        if 'log_training_metrics' in params:
+            tc['log_training_metrics'] = params['log_training_metrics']
+        if 'verbose_training' in params:
+            tc['verbose_training'] = params['verbose_training']
+        # Persister
+        self.current_config['model_config'] = mc
+        self.current_config['training_config'] = tc
+
+    def get_parameters(self) -> Dict[str, Any]:
+        return {
+            'model_config': self.current_config.get('model_config', {}),
+            'training_config': self.current_config.get('training_config', {}),
+            'data_config': self.current_config.get('data_config', {}),
+        }
+
+    def display_configuration(self) -> None:
+        self.display_current_configuration()
     
     def _get_default_config(self) -> Dict[str, Any]:
         """
