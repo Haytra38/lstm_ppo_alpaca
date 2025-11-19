@@ -13,6 +13,7 @@ gymnasium>=0.29
 stable-baselines3>=2.3.0
 tensorboard>=2.18
 alpaca-trade-api>=3.0.0
+python-dotenv>=1.0.1
 
 # Note: PyTorch is installed separately in setup_aws.sh with the
 # appropriate CUDA/CPU wheels. Do NOT add torch here.

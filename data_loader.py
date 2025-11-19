@@ -3,6 +3,9 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class DataLoader:
@@ -27,6 +30,7 @@ class DataLoader:
             else:
                 barset = self.api.get_bars(symbol, timeframe, start=start, end=end, limit=None).df
             if barset.empty:
+                print(f"Aucune donnée renvoyée ({symbol}, {timeframe}, {start} -> {end})")
                 return pd.DataFrame()
             barset = barset.reset_index()
             df = pd.DataFrame({
@@ -41,7 +45,8 @@ class DataLoader:
             if df.isnull().any().any():
                 df = df.fillna(method='ffill').fillna(method='bfill')
             return df
-        except Exception:
+        except Exception as e:
+            print(f"Erreur lors de l'appel API Alpaca: {e}")
             return pd.DataFrame()
 
     def get_stock_data(self, symbol, period='1y', interval='1m'):
@@ -103,6 +108,7 @@ class DataLoader:
                     limit=None
                 ).df
             if barset.empty:
+                print(f"Aucune donnée renvoyée ({symbol}, {alpaca_interval}, {start_date.strftime('%Y-%m-%d')} -> {end_date.strftime('%Y-%m-%d')})")
                 return pd.DataFrame()
             barset = barset.reset_index()
             df = pd.DataFrame({
@@ -114,7 +120,8 @@ class DataLoader:
             })
             df.index = pd.to_datetime(barset['timestamp'])
             return df
-        except Exception:
+        except Exception as e:
+            print(f"Erreur lors de l'appel API Alpaca: {e}")
             return pd.DataFrame()
 
     def load_stock_data(self, ticker, start_date, end_date, use_alpaca=True, interval='1Min'):
@@ -192,33 +199,24 @@ def load_data_from_file(filename):
 if __name__ == "__main__":
      symbol = "BTC/USD"
      timeframe = "1Min"
-     start_date = "2025-01-01"
-     end_date = "2025-11-14"
+     start_date = "2021-01-01"
+     end_date = "2025-11-18"
 
-     os.makedirs("data", exist_ok=True)
+     api_key_env = os.environ.get("ALPACA_API_KEY")
+     api_secret_env = os.environ.get("ALPACA_API_SECRET")
+     placeholders = {"your_alpaca_api_key_here", "your_alpaca_api_secret_here", ""}
+     if api_key_env in placeholders or api_secret_env in placeholders or api_key_env is None or api_secret_env is None:
+         print("ALPACA_API_KEY/ALPACA_API_SECRET non définis ou invalides")
+         raise SystemExit(1)
 
      dl = DataLoader()
      df = dl.get_historical_data(symbol, start_date, end_date, timeframe)
 
      if df is None or df.empty:
-         files = dl.get_available_data_files()
-         if files:
-             fallback = files[0]
-             df = dl.load_data_from_file(fallback)
-         else:
-             dates = pd.date_range(start=start_date, end=end_date, freq='1min')
-             rng = np.random.default_rng(42)
-             base = 50000.0
-             ret = rng.normal(0.0001, 0.02, len(dates))
-             prices = base * np.exp(np.cumsum(ret))
-             df = pd.DataFrame({
-                 'Open': prices * (1 + rng.normal(0, 0.001, len(dates))),
-                 'High': prices * (1 + np.abs(rng.normal(0, 0.002, len(dates)))),
-                 'Low': prices * (1 - np.abs(rng.normal(0, 0.002, len(dates)))),
-                 'Close': prices,
-                 'Volume': rng.integers(100000, 1000000, len(dates))
-             }, index=dates)
+         print("Aucune donnée récupérée via l'API Alpaca")
+         raise SystemExit(2)
 
+     os.makedirs("data", exist_ok=True)
      output_path = f"data/{symbol.replace('/', '-')}{timeframe}_{start_date}_{end_date}.csv"
      df.to_csv(output_path, index=True)
      print(output_path)
