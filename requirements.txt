@@ -2,7 +2,11 @@ tensorflow==2.18.0
 keras>=3.0.0
 numpy>=1.26
 pandas>=2.2
+matplotlib>=3.8
+seaborn>=0.13
 scikit-learn>=1.3
+joblib>=1.3
+ipykernel>=6.29
 rich>=13.7
 yfinance>=0.2.40
 gymnasium>=0.29
