@@ -4,7 +4,6 @@ __pycache__/
 .venv/
 
 # Training artifacts and outputs
-saved_models/
 models/
 results/
 ppo_trading_minute_historical_tensorboard/
