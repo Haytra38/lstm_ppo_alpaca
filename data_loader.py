@@ -199,8 +199,8 @@ def load_data_from_file(filename):
 if __name__ == "__main__":
      symbol = "BTC/USD"
      timeframe = "1Min"
-     start_date = "2021-01-01"
-     end_date = "2025-11-18"
+     start_date = "2025-09-01"
+     end_date = "2025-10-31"
 
      api_key_env = os.environ.get("ALPACA_API_KEY")
      api_secret_env = os.environ.get("ALPACA_API_SECRET")

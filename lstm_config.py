@@ -322,10 +322,10 @@ class LSTMConfigurator:
                     }
                 ],
                 "dense_layers": [16, 8],  # Couches denses intermédiaires
-                "dense_units": 1,
+                "dense_units": 60,
                 "learning_rate": 0.0005,  # Learning rate optimisé
                 "sequence_length": 240,  # 4 heures pour données 1-minute
-                "nombre_de_colonnes": 1,
+                "nombre_de_colonnes": 4,
                 "loss_function": "directional_mse",  # Fonction de perte personnalisée
                 "optimizer": "adam",  # Optimiseur configurable
                 "optimizer_config": {  # Configuration détaillée de l'optimiseur
