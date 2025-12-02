@@ -16,7 +16,11 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
 # Activer mixed precision (float16) pour accélérer sur GPU L4
-mixed_precision.set_global_policy('mixed_float16')
+_mp_flag = os.environ.get('TF_MIXED_PRECISION', '0')
+if _mp_flag == '1':
+    mixed_precision.set_global_policy('mixed_float16')
+else:
+    mixed_precision.set_global_policy('float32')
 
 # Activer la croissance mémoire du GPU pour éviter OOM et allocations massives
 _gpus = tf.config.list_physical_devices('GPU')
@@ -180,7 +184,7 @@ class LSTMModel:
             
             # Ajout de BatchNormalization si spécifié
             if layer.get('batch_normalization', False):
-                self.model.add(BatchNormalization())
+                self.model.add(BatchNormalization(dtype='float32'))
             
             # Ajout de Dropout
             if layer.get('dropout', 0) > 0:
@@ -442,13 +446,19 @@ class LSTMModel:
             
             # Prédiction directe multi-pas : le modèle doit renvoyer un tenseur de forme (1, prediction_steps, nombre_de_colonnes)
             predictions_scaled = self.model.predict(input_seq, verbose=verbose)  # shape attendue : (1, prediction_steps, nombre_de_colonnes)
-            predictions_scaled = predictions_scaled[0]  # On récupère la partie prédictive de la sortie
+            predictions_scaled = predictions_scaled[0]
+
+            # Cast explicite pour stabilité des opérations numpy/sklearn
+            predictions_scaled = predictions_scaled.astype('float64')
             
             # Inverse scaling si un scaler a été utilisé pendant l'entraînement
             if self.scaler is not None:
                 predictions = self.scaler.inverse_transform(predictions_scaled)
             else:
                 predictions = predictions_scaled
+
+            # Nettoyage des NaN/Inf éventuels
+            predictions = np.nan_to_num(predictions, nan=0.0, posinf=0.0, neginf=0.0)
             
             # Génération des dates futures à partir des métadonnées si disponibles
             future_dates = None
@@ -562,10 +572,16 @@ class LSTMModel:
                 historical_dates = data.tail(self.sequence_length).index.astype(str).tolist()
             
             # Construction du résultat final
+            # Harmoniser la longueur des colonnes cibles avec les sorties du modèle
+            out_cols = predictions.shape[1]
+            if len(target_columns) != out_cols:
+                target_columns = target_columns[:out_cols]
+            future_dict = {col: predictions[:, idx].tolist() for idx, col in enumerate(target_columns)}
+
             results = {
                 "historical": data.tail(self.sequence_length).to_dict("list"),
-                "historical_dates": historical_dates,  # Ajout des dates historiques
-                "future": {col: predictions[:, idx].tolist() for idx, col in enumerate(target_columns)},
+                "historical_dates": historical_dates,
+                "future": future_dict,
                 "future_dates": future_dates,
                 "confidence": confidence,
                 "metrics": metrics
