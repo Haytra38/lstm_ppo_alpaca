@@ -672,6 +672,13 @@ class LSTMModel:
             logging.info(f"Scaler chargé: {type(self.scaler).__name__}")
             # Chargement de config
             self._load_config(config_path)
+            try:
+                if self.config and isinstance(self.config, dict):
+                    mp = self.config.get('mixed_precision', None)
+                    if mp is not None:
+                        mixed_precision.set_global_policy('mixed_float16' if mp else 'float32')
+            except Exception:
+                pass
             # Chargement de l'historique si disponible
             #self.load_training_history(model_name)
 
