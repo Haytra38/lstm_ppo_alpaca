@@ -743,6 +743,9 @@ class LSTMConfigurator:
         
         # Nombre de colonnes
         self._configure_column_count()
+
+        # Scaler
+        self._configure_scaler()
         
         # Mettre à jour la configuration
         self.current_config['model_config'].update({
@@ -961,6 +964,9 @@ class LSTMConfigurator:
         
         # Nombre de colonnes
         self._configure_column_count()
+
+        # Scaler
+        self._configure_scaler()
         
         # Mettre à jour la configuration
         self.current_config['model_config'].update({
@@ -1011,6 +1017,70 @@ class LSTMConfigurator:
                 nombre_de_colonnes = current_cols
         
         self.current_config['model_config']['nombre_de_colonnes'] = nombre_de_colonnes
+
+    def _configure_scaler(self) -> None:
+        dp = self.current_config['training_config'].setdefault('data_preprocessing', {})
+        scaler_type = dp.get('scaler_type', 'robust')
+        scaler_cfg = dp.get('scaler_config', {})
+        print("\n🔧 Configuration du scaler:")
+        print("1. robust")
+        print("2. robust_conservative")
+        print("3. minmax")
+        print("4. standard")
+        print("5. quantile")
+        print("6. maxabs")
+        choice = input(f"➤ Type actuel: {scaler_type}, nouveau (1-6, laisser vide pour garder): ").strip()
+        type_map = {"1": "robust", "2": "robust_conservative", "3": "minmax", "4": "standard", "5": "quantile", "6": "maxabs"}
+        if choice in type_map:
+            scaler_type = type_map[choice]
+        dp['scaler_type'] = scaler_type
+        scaler_cfg = dp.get('scaler_config', {})
+        if scaler_type == 'robust':
+            q = input(f"Quantile range (min,max, défaut: {tuple(scaler_cfg.get('robust', {}).get('quantile_range', [25.0,75.0]))}): ").strip()
+            if q:
+                try:
+                    a,b = [float(x.strip()) for x in q.split(',')]
+                    scaler_cfg.setdefault('robust', {})['quantile_range'] = [a,b]
+                except Exception:
+                    pass
+        elif scaler_type == 'robust_conservative':
+            q = input(f"Quantile range (min,max, défaut: {tuple(scaler_cfg.get('robust_conservative', {}).get('quantile_range', [10.0,90.0]))}): ").strip()
+            if q:
+                try:
+                    a,b = [float(x.strip()) for x in q.split(',')]
+                    scaler_cfg.setdefault('robust_conservative', {})['quantile_range'] = [a,b]
+                except Exception:
+                    pass
+        elif scaler_type == 'minmax':
+            fr = input(f"Feature range (min,max, défaut: {tuple(scaler_cfg.get('minmax', {}).get('feature_range', [0,1]))}): ").strip()
+            if fr:
+                try:
+                    a,b = [float(x.strip()) for x in fr.split(',')]
+                    scaler_cfg.setdefault('minmax', {})['feature_range'] = [a,b]
+                except Exception:
+                    pass
+        elif scaler_type == 'standard':
+            with_mean = input(f"with_mean (O/n, défaut: {scaler_cfg.get('standard', {}).get('with_mean', True)}): ").strip().lower()
+            with_std = input(f"with_std (O/n, défaut: {scaler_cfg.get('standard', {}).get('with_std', True)}): ").strip().lower()
+            if with_mean:
+                scaler_cfg.setdefault('standard', {})['with_mean'] = with_mean not in ['n','non','no']
+            if with_std:
+                scaler_cfg.setdefault('standard', {})['with_std'] = with_std not in ['n','non','no']
+        elif scaler_type == 'quantile':
+            nq = input(f"n_quantiles (défaut: {scaler_cfg.get('quantile', {}).get('n_quantiles', 1000)}): ").strip()
+            od = input(f"output_distribution (uniform/normal, défaut: {scaler_cfg.get('quantile', {}).get('output_distribution', 'uniform')}): ").strip()
+            if nq:
+                try:
+                    scaler_cfg.setdefault('quantile', {})['n_quantiles'] = int(nq)
+                except Exception:
+                    pass
+            if od in ['uniform','normal']:
+                scaler_cfg.setdefault('quantile', {})['output_distribution'] = od
+        elif scaler_type == 'maxabs':
+            cp = input(f"copy (O/n, défaut: {scaler_cfg.get('maxabs', {}).get('copy', True)}): ").strip().lower()
+            if cp:
+                scaler_cfg.setdefault('maxabs', {})['copy'] = cp not in ['n','non','no']
+        dp['scaler_config'] = scaler_cfg
     
     def configure_training_parameters(self) -> None:
         """
@@ -1711,7 +1781,12 @@ class LSTMConfigurator:
                     print("\n⚠️  Entraînement annulé par l'utilisateur.")
                     return None
             
-            lstm_model = LSTMModel()
+            dp = self.current_config['training_config'].get('data_preprocessing', {})
+            scaler_cfg = {
+                'scaler_type': dp.get('scaler_type', 'robust'),
+                'scaler_config': dp.get('scaler_config', {})
+            }
+            lstm_model = LSTMModel(scaler_config=scaler_cfg)
             
             if choice == '1':
                 # Nouveau modèle
@@ -2249,7 +2324,9 @@ class LSTMConfigurator:
         print(f"data = pd.read_csv('{config_for_training['data_path']}')")
         print("")
         print("# Créer et configurer le modèle")
-        print("lstm_model = LSTMModel()")
+        dp = self.current_config['training_config'].get('data_preprocessing', {})
+        scaler_cfg_code = dict_to_python_code({'scaler_type': dp.get('scaler_type', 'robust'), 'scaler_config': dp.get('scaler_config', {})})
+        print(f"lstm_model = LSTMModel(scaler_config={scaler_cfg_code})")
         print(f"model_config = {dict_to_python_code(config_for_training['model_config'])}")
         print("lstm_model.create(model_config)")
         print("")
@@ -2276,7 +2353,9 @@ class LSTMConfigurator:
                 f.write(f"    # Charger les données\n")
                 f.write(f"    data = pd.read_csv('{config_for_training['data_path']}')\n\n")
                 f.write(f"    # Créer et configurer le modèle\n")
-                f.write(f"    lstm_model = LSTMModel()\n")
+                dp = self.current_config['training_config'].get('data_preprocessing', {})
+                scaler_cfg_code = dict_to_python_code({'scaler_type': dp.get('scaler_type', 'robust'), 'scaler_config': dp.get('scaler_config', {})}, indent=1)
+                f.write(f"    lstm_model = LSTMModel(scaler_config={scaler_cfg_code})\n")
                 f.write(f"    model_config = {dict_to_python_code(config_for_training['model_config'], indent=1)}\n")
                 f.write(f"    lstm_model.create(model_config)\n\n")
                 f.write(f"    # Configuration d'entraînement\n")
