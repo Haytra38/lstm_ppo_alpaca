@@ -438,10 +438,9 @@ class LSTMModel:
                 logging.warning(f"Warning: prediction_steps was None, using default value: {prediction_steps}")
             confidence_interval = predict_config.get("confidence_interval", False)
             
-            # Extraction des données cibles en numpy array
             data_array = data[target_columns].values
-            
-            # Création de la séquence d'entrée
+            if self.scaler is not None:
+                data_array = self.scaler.transform(data_array)
             input_seq = self._create_last_sequence_for_prediction(data_array, target_columns)
             
             # Prédiction directe multi-pas : le modèle doit renvoyer un tenseur de forme (1, prediction_steps, nombre_de_colonnes)
@@ -553,6 +552,16 @@ class LSTMModel:
                 logging.warning(f"Warning: timeframe_info est None")
                 # Utiliser des indices numériques comme fallback
                 future_dates = [f"t+{i+1}" for i in range(int(prediction_steps))]
+
+            calibrate = predict_config.get("calibrate_to_last", False)
+            if calibrate:
+                try:
+                    last_vals = data.tail(1)[target_columns].values[0]
+                    first_pred = predictions[0]
+                    offset = last_vals - first_pred
+                    predictions = predictions + offset
+                except Exception:
+                    pass
 
             # Calcul simplifié de l'intervalle de confiance
             confidence = None
