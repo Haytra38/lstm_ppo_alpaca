@@ -349,6 +349,7 @@ class LSTMConfigurator:
                 "validation_split": 0.2,
                 "learning_rate": 0.0005,  # Cohérent avec model_config
                 "data_preprocessing": {  # Configuration du prétraitement des données
+                    "target_transform": "raw",
                     "scaler_type": "robust",  # "robust", "minmax", "standard", "robust_conservative", "quantile", "maxabs"
                     "scaler_config": {  # Configuration spécifique au scaler
                         "robust": {
@@ -1130,6 +1131,34 @@ class LSTMConfigurator:
             
             print(f"✅ Configuration d'entraînement mise à jour avec succès!")
             print(f"🔄 Nombre de colonnes d'entrée automatiquement mis à jour: {nombre_colonnes}")
+
+            dp = self.current_config['training_config'].setdefault('data_preprocessing', {})
+            print("\n🎯 Mode des cibles:")
+            print("1. brut (prix)")
+            print("2. log(prix)")
+            print("3. Δlog(prix)")
+            tt_choice = input("➤ Sélection (1-3, défaut: 1): ").strip()
+            if tt_choice == '2':
+                dp['target_transform'] = 'log'
+            elif tt_choice == '3':
+                dp['target_transform'] = 'log_delta'
+            else:
+                dp['target_transform'] = 'raw'
+
+            print("\n🎯 Fonction de perte:")
+            print("1. MSE")
+            print("2. MAE")
+            print("3. Huber")
+            print("4. Directionnelle (directional_mse)")
+            lf_choice = input("➤ Sélection (1-4, défaut: 1): ").strip()
+            if lf_choice == '2':
+                self.current_config['model_config']['loss_function'] = 'mae'
+            elif lf_choice == '3':
+                self.current_config['model_config']['loss_function'] = 'huber'
+            elif lf_choice == '4':
+                self.current_config['model_config']['loss_function'] = 'directional_mse'
+            else:
+                self.current_config['model_config']['loss_function'] = 'mse'
             
         except ValueError as e:
             print(f"❌ Erreur de saisie: {e}")

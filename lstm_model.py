@@ -47,6 +47,7 @@ class LSTMModel:
         self.sequence_length = None
         self.config = None
         self.model_directory ="saved_models"
+        self.target_transform = 'raw'
         
         # Configuration du scaler selon la configuration fournie
         self.scaler_config = scaler_config or {
@@ -210,9 +211,17 @@ class LSTMModel:
         )
         
         # Compilation avec fonction de perte personnalisée
-        loss_function = config.get('loss_function', 'mse')
-        if loss_function == 'directional_mse':
+        loss_name = config.get('loss_function', 'mse')
+        if loss_name == 'directional_mse':
             loss_function = self._directional_loss
+        elif loss_name == 'huber':
+            loss_function = tf.keras.losses.Huber()
+        elif loss_name == 'mae':
+            loss_function = 'mae'
+        elif loss_name == 'mse':
+            loss_function = 'mse'
+        else:
+            loss_function = loss_name
         
         self.model.compile(
             optimizer=optimizer,
@@ -348,6 +357,15 @@ class LSTMModel:
             # Séparation en train/test
             train_data, test_data = self._split_data(data,target_columns, ratio=0.8)
 
+            dp = training_config.get('data_preprocessing', {})
+            self.target_transform = dp.get('target_transform', 'raw')
+            if isinstance(self.config, dict):
+                self.config['target_transform'] = self.target_transform
+
+            if self.target_transform in ['log', 'log_delta']:
+                train_data = np.log(np.clip(train_data.astype('float64'), 1e-12, None))
+                test_data = np.log(np.clip(test_data.astype('float64'), 1e-12, None))
+
             # Entraînement du scaler
             self.scaler.fit(train_data)
 
@@ -360,6 +378,18 @@ class LSTMModel:
             self._check_dimensions(X_train, Y_train)
             X_test, Y_test = self._create_sequences(test_data)
             self._check_dimensions(X_test, Y_test)
+
+            if self.target_transform == 'log_delta':
+                for i in range(Y_train.shape[0]):
+                    prev = X_train[i, -1, :]
+                    Y_train[i, 0, :] = Y_train[i, 0, :] - prev
+                    for j in range(1, Y_train.shape[1]):
+                        Y_train[i, j, :] = Y_train[i, j, :] - Y_train[i, j-1, :]
+                for i in range(Y_test.shape[0]):
+                    prev = X_test[i, -1, :]
+                    Y_test[i, 0, :] = Y_test[i, 0, :] - prev
+                    for j in range(1, Y_test.shape[1]):
+                        Y_test[i, j, :] = Y_test[i, j, :] - Y_test[i, j-1, :]
 
             
             
@@ -438,7 +468,9 @@ class LSTMModel:
                 logging.warning(f"Warning: prediction_steps was None, using default value: {prediction_steps}")
             confidence_interval = predict_config.get("confidence_interval", False)
             
-            data_array = data[target_columns].values
+            data_array = data[target_columns].values.astype('float64')
+            if self.target_transform in ['log', 'log_delta']:
+                data_array = np.log(np.clip(data_array, 1e-12, None))
             if self.scaler is not None:
                 data_array = self.scaler.transform(data_array)
             input_seq = self._create_last_sequence_for_prediction(data_array, target_columns)
@@ -455,6 +487,14 @@ class LSTMModel:
                 predictions = self.scaler.inverse_transform(predictions_scaled)
             else:
                 predictions = predictions_scaled
+
+            if self.target_transform == 'log_delta':
+                last_vals = data.tail(1)[target_columns].values[0].astype('float64')
+                last_log = np.log(np.clip(last_vals, 1e-12, None))
+                cum = np.cumsum(predictions, axis=0)
+                predictions = np.exp(last_log + cum)
+            elif self.target_transform == 'log':
+                predictions = np.exp(predictions)
 
             # Nettoyage des NaN/Inf éventuels
             predictions = np.nan_to_num(predictions, nan=0.0, posinf=0.0, neginf=0.0)
@@ -825,6 +865,8 @@ class LSTMModel:
                     # Charger les target_columns si elles existent dans la configuration
                     if 'target_columns' in config:
                         self.target_columns = config['target_columns']
+                    if 'target_transform' in config:
+                        self.target_transform = config['target_transform']
                     return config
             else:
                 logging.error(f"Variable MODEL_CONFIG non trouvée dans {config_path}")
